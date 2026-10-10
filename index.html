@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Satellite Tracker</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="tooltip" hidden></div>
+
+    <aside class="panel" id="controls">
+      <h1>Satellite Tracker</h1>
+      <label class="field">
+        <span>Satellites</span>
+        <select id="group">
+          <option value="stations">Space stations</option>
+          <option value="catnr:25544">ISS only (CATNR 25544)</option>
+          <option value="visual">100 brightest</option>
+          <option value="starlink">Starlink</option>
+          <option value="oneweb">OneWeb</option>
+          <option value="gps-ops">GPS</option>
+          <option value="galileo">Galileo</option>
+          <option value="weather">Weather</option>
+          <option value="geo">Geostationary</option>
+          <option value="active">All active</option>
+        </select>
+      </label>
+      <div class="search">
+        <input id="search" type="search" placeholder="Search name or NORAD ID…" autocomplete="off" />
+        <ul id="results" hidden></ul>
+      </div>
+      <div id="status" class="muted">Starting…</div>
+      <div class="legend">
+        <span><i style="--c: rgb(89 209 255)"></i>LEO</span>
+        <span><i style="--c: rgb(140 255 122)"></i>MEO</span>
+        <span><i style="--c: rgb(255 107 140)"></i>GEO</span>
+        <span><i style="--c: rgb(194 140 255)"></i>HEO</span>
+      </div>
+      <button id="refresh" class="link">Force refresh from CelesTrak</button>
+      <div id="texture-note" class="note" hidden>
+        NASA textures not found. Run <code>npm run textures</code> and reload.
+      </div>
+    </aside>
+
+    <aside class="panel" id="info" hidden>
+      <header>
+        <h2 id="sat-name"></h2>
+        <button id="close-info" class="icon" aria-label="Deselect">×</button>
+      </header>
+      <dl id="sat-fields"></dl>
+      <label class="check"><input type="checkbox" id="follow" /> Follow with camera</label>
+
+      <section class="compare">
+        <h3>Kepler vs SGP4</h3>
+        <p class="muted small">
+          Position error of a pure two-body orbit, propagated from the TLE epoch. The dashed line is
+          Earth's diameter.
+        </p>
+        <p class="muted small">
+          Notice the blue line starts at zero but overtakes orange: SGP4's instantaneous state includes
+          short-period J2 wobbles, so its osculating semi-major axis gives a slightly wrong
+          <em>average</em> period. The TLE's mean elements are wrong at t = 0 but have the right period.
+        </p>
+        <div class="row">
+          <div class="seg" id="span">
+            <button data-days="1">1d</button>
+            <button data-days="3" class="on">3d</button>
+            <button data-days="7">7d</button>
+            <button data-days="14">14d</button>
+          </div>
+        </div>
+        <canvas id="chart"></canvas>
+        <div class="legend">
+          <span><i style="--c: #ff7a3d"></i>Kepler from TLE elements</span>
+          <span><i style="--c: #4fc3f7"></i>Kepler from SGP4 state at epoch</span>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="ghost" checked /> Show Kepler ghost on globe, seeded from
+          <select id="ghost-seed">
+            <option value="tle">TLE elements</option>
+            <option value="state">SGP4 state</option>
+          </select>
+        </label>
+      </section>
+    </aside>
+
+    <footer class="panel" id="timebar">
+      <div id="clock">—</div>
+      <div class="seg" id="speeds">
+        <button data-speed="0">❚❚</button>
+        <button data-speed="1" class="on">1×</button>
+        <button data-speed="60">60×</button>
+        <button data-speed="600">600×</button>
+        <button data-speed="3600">1h/s</button>
+        <button data-speed="86400">1d/s</button>
+      </div>
+      <button id="now">Now</button>
+      <button id="to-epoch" disabled>TLE epoch</button>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
