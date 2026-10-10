@@ -99,6 +99,11 @@ async function writeCache(cache: Cache | null, url: string, entry: Cached) {
   );
 }
 
+const utcTime = (ms: number) => new Date(ms).toISOString().slice(11, 16);
+
+const snapshotWarning = (nextUpdateAt: number) =>
+  `CelesTrak allows one download per group every 2 hours per network, and this network already downloaded it. Showing the copy bundled with the site until ${utcTime(nextUpdateAt)} UTC.`;
+
 const inFlight = new Map<string, Promise<GpResult>>();
 
 export function fetchGp(query: GpQuery, { force = false } = {}): Promise<GpResult> {
@@ -146,12 +151,18 @@ async function doFetch(query: GpQuery, force: boolean): Promise<GpResult> {
   const cached = await readCache(cache, url);
 
   if (cached && !force && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
-    return {
-      text: cached.text,
-      fetchedAt: cached.fetchedAt,
-      nextUpdateAt: cached.checkedAt + CACHE_TTL_MS,
-      source: cached.origin === 'snapshot' ? 'snapshot' : 'cache',
-    };
+    const nextUpdateAt = cached.checkedAt + CACHE_TTL_MS;
+    if (cached.origin === 'snapshot') {
+      // Still backup data, so keep telling the user — not just the first time.
+      return {
+        text: cached.text,
+        fetchedAt: cached.fetchedAt,
+        nextUpdateAt,
+        source: 'snapshot',
+        warning: snapshotWarning(nextUpdateAt),
+      };
+    }
+    return { text: cached.text, fetchedAt: cached.fetchedAt, nextUpdateAt, source: 'cache' };
   }
 
   try {
@@ -195,15 +206,14 @@ async function doFetch(query: GpQuery, force: boolean): Promise<GpResult> {
         nextUpdateAt,
         source: 'snapshot',
         warning: rateLimited
-          ? 'CelesTrak allows one download per group every 2 hours per network, and this network already downloaded it. Showing the copy bundled with the site.'
+          ? snapshotWarning(nextUpdateAt)
           : `CelesTrak unreachable (${(err as Error).message}). Showing the copy bundled with the site.`,
       };
     }
 
     if (rateLimited) {
-      const at = new Date(nextUpdateAt).toISOString().slice(11, 16);
       throw new Error(
-        `CelesTrak allows one download per group every 2 hours per network, and this network already downloaded it. Try again after ${at} UTC.`,
+        `CelesTrak allows one download per group every 2 hours per network, and this network already downloaded it. Try again after ${utcTime(nextUpdateAt)} UTC.`,
       );
     }
     throw err;

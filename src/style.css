@@ -401,3 +401,7 @@ select:disabled {
     max-width: none;
   }
 }
+input[type="search"]:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}

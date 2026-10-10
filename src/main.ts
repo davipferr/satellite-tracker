@@ -65,6 +65,9 @@ window.addEventListener('resize', () => {
 // ---------------------------------------------------------------------------
 
 const client = new PropagationClient();
+// Kick off the first propagation as soon as the worker is ready instead of waiting for
+// the next animation frame — those never come while the tab is in the background.
+client.onReady = () => client.request(clock.simMs);
 const clock = { simMs: Date.now(), speed: 1, lastReal: performance.now() };
 
 let catalog: Catalog | null = null;
@@ -111,18 +114,37 @@ function savedGroup(): string {
 const refreshBtn = $<HTMLButtonElement>('refresh');
 let loading = false;
 
-/** Lock the data controls while a load runs, so impatient clicks can't fire extra CelesTrak requests. */
+/**
+ * Lock the controls for the whole load — download, parsing, worker start-up and the
+ * first propagation — so impatient clicks can't start a second load or fire extra
+ * CelesTrak requests, and search can't run against the outgoing catalog.
+ */
 function setLoading(on: boolean) {
   loading = on;
   groupSelect.disabled = on;
+  searchInput.disabled = on;
+  if (on) {
+    results = [];
+    renderResults();
+  }
   updateRefreshButton();
 }
 
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+/** Cached loads finish in a few ms; keep the toast up long enough to actually be seen. */
+const MIN_LOADING_MS = 600;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Give the browser a chance to paint the toast before synchronous work. Falls back to a
+ * timer because requestAnimationFrame never fires in a background tab.
+ */
+const yieldToPaint = () => Promise.race([new Promise<void>((r) => requestAnimationFrame(() => r())), sleep(50)]);
 
 async function loadGroup(value: string, force = false) {
   if (loading) return;
   const token = ++loadToken;
+  const startedAt = performance.now();
   const label = groupSelect.selectedOptions[0]?.text ?? value;
   const query: GpQuery = value.startsWith('catnr:') ? { catnr: Number(value.slice(6)) } : { group: value };
   setLoading(true);
@@ -132,12 +154,12 @@ async function loadGroup(value: string, force = false) {
     if (token !== loadToken) return;
 
     toast.show('loading', `Parsing ${label} TLEs…`);
-    await nextFrame(); // let the toast paint before the synchronous parse
+    await yieldToPaint();
     const cat = new Catalog(result.text);
     catalog = cat;
     dataInfo = result;
 
-    toast.show('loading', `Propagating ${cat.size.toLocaleString()} satellites…`);
+    toast.show('loading', `Propagating ${cat.size.toLocaleString()} ${cat.size === 1 ? 'satellite' : 'satellites'}…`);
     const firstPositions = client.whenPositions();
     client.setCatalog(cat.entries.map(({ tle }) => ({ name: tle.name, line1: tle.line1, line2: tle.line2 })));
     sats.setCatalog(cat.colors(), scene);
@@ -148,6 +170,7 @@ async function loadGroup(value: string, force = false) {
       /* storage unavailable — fine */
     }
     await firstPositions;
+    await sleep(MIN_LOADING_MS - (performance.now() - startedAt));
     if (token !== loadToken) return;
 
     if (result.warning) toast.show('warning', result.warning, 12000);

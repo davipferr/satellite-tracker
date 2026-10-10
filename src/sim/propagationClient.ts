@@ -20,6 +20,8 @@ export class PropagationClient {
   positionsTimeMs = NaN;
   lastWorkerMs = 0;
   onPositions: (() => void) | null = null;
+  /** Called when the worker has built its satrecs for a new catalog. */
+  onReady: (() => void) | null = null;
   private waiters: (() => void)[] = [];
 
   constructor() {
@@ -50,6 +52,7 @@ export class PropagationClient {
     if (msg.generation !== this.generation) return; // reply for an old catalog
     if (msg.type === 'ready') {
       this.ready = true;
+      this.onReady?.();
       return;
     }
     // Swap: the fresh buffer becomes current, the old current becomes the spare.
