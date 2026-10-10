@@ -326,3 +326,78 @@ code {
     min-width: 0;
   }
 }
+
+#toast {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 10px 12px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--toast-accent, #4fc3f7);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  animation: toast-in 0.18s ease-out;
+}
+#toast[hidden],
+#toast button[hidden] {
+  display: none;
+}
+#toast[data-kind="warning"] {
+  --toast-accent: var(--accent);
+}
+#toast[data-kind="error"] {
+  --toast-accent: #ff5d6c;
+}
+#toast .msg {
+  flex: 1;
+  line-height: 1.45;
+}
+#toast .spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--toast-accent, #4fc3f7);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+#toast:not([data-kind="loading"]) .spinner {
+  display: none;
+}
+select:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* Below this width the centred time bar reaches the right corner: sit above it. */
+@media (max-width: 1380px) {
+  #toast {
+    bottom: 70px;
+  }
+}
+@media (max-width: 760px) {
+  #toast {
+    left: 8px;
+    right: 8px;
+    bottom: 64px;
+    max-width: none;
+  }
+}

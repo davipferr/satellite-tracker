@@ -20,6 +20,7 @@ export class PropagationClient {
   positionsTimeMs = NaN;
   lastWorkerMs = 0;
   onPositions: (() => void) | null = null;
+  private waiters: (() => void)[] = [];
 
   constructor() {
     this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.handle(e.data);
@@ -58,6 +59,12 @@ export class PropagationClient {
     this.lastWorkerMs = msg.elapsedMs;
     this.busy = false;
     this.onPositions?.();
+    for (const resolve of this.waiters.splice(0)) resolve();
+  }
+
+  /** Resolves the next time fresh positions arrive (e.g. the first batch after setCatalog). */
+  whenPositions(): Promise<void> {
+    return new Promise((resolve) => this.waiters.push(resolve));
   }
 
   private post(msg: ToWorker, transfer: Transferable[] = []) {

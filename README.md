@@ -45,8 +45,19 @@ implementations. `npm run build` type-checks and builds to `dist/`.
 
 CelesTrak GP API, e.g. `https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle`.
 In dev, requests go through Vite's proxy (`/celestrak`). Production builds call CelesTrak directly
-(it sends `Access-Control-Allow-Origin: *`). Use “Force refresh” sparingly, because CelesTrak
-blocks clients that re-download unchanged data too often.
+(it sends `Access-Control-Allow-Origin: *`).
+
+CelesTrak allows **one download per group every 2 hours per IP** and answers HTTP 403 otherwise.
+The limit applies to the whole network, so a second device on the same Wi-Fi gets refused even
+with an empty cache. The app falls back in this order:
+
+1. Browser cache (2 h). A 403 when a cached copy exists just means the copy is current.
+2. Any older cached copy.
+3. A snapshot of every group, bundled with the site. GitHub Actions downloads it on each deploy
+   and every 6 hours ([scripts/fetch-snapshots.mjs](scripts/fetch-snapshots.mjs)).
+
+The "Check CelesTrak for new data" button stays disabled until CelesTrak will actually serve new
+data.
 
 Textures: NASA Visible Earth (public domain). Blue Marble Next Generation, Dec 2004, 5400×2700, and
 Black Marble 2016 night lights, 3600×1800. Without them the app falls back to a grid texture.

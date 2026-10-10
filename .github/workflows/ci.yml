@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Refresh the bundled TLE snapshots (the fallback when CelesTrak rate-limits a visitor).
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
@@ -32,6 +35,10 @@ jobs:
           key: nasa-textures-${{ hashFiles('scripts/fetch-textures.mjs') }}
 
       - run: npm run textures
+
+      # Fallback data for visitors CelesTrak refuses. Never fails the build.
+      - run: npm run snapshots
+        if: github.event_name != 'pull_request'
 
       # Type-checks, then builds to dist/
       - run: npm run build

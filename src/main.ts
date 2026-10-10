@@ -15,6 +15,7 @@ import { sunDirectionEci } from './coords/sun';
 import { propagateKepler, type KeplerOrbit } from './orbit/kepler';
 import { propagateSgp4 } from './orbit/sgp4';
 import { drawErrorChart } from './ui/errorChart';
+import { createToast } from './ui/toast';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const DAY_MS = 86_400_000;
@@ -107,16 +108,37 @@ function savedGroup(): string {
   }
 }
 
+const refreshBtn = $<HTMLButtonElement>('refresh');
+let loading = false;
+
+/** Lock the data controls while a load runs, so impatient clicks can't fire extra CelesTrak requests. */
+function setLoading(on: boolean) {
+  loading = on;
+  groupSelect.disabled = on;
+  updateRefreshButton();
+}
+
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
 async function loadGroup(value: string, force = false) {
+  if (loading) return;
   const token = ++loadToken;
-  setStatus(`Loading ${groupSelect.selectedOptions[0]?.text ?? value}…`);
+  const label = groupSelect.selectedOptions[0]?.text ?? value;
   const query: GpQuery = value.startsWith('catnr:') ? { catnr: Number(value.slice(6)) } : { group: value };
+  setLoading(true);
+  toast.show('loading', `Loading ${label}…`);
   try {
     const result = await fetchGp(query, { force });
     if (token !== loadToken) return;
+
+    toast.show('loading', `Parsing ${label} TLEs…`);
+    await nextFrame(); // let the toast paint before the synchronous parse
     const cat = new Catalog(result.text);
     catalog = cat;
     dataInfo = result;
+
+    toast.show('loading', `Propagating ${cat.size.toLocaleString()} satellites…`);
+    const firstPositions = client.whenPositions();
     client.setCatalog(cat.entries.map(({ tle }) => ({ name: tle.name, line1: tle.line1, line2: tle.line2 })));
     sats.setCatalog(cat.colors(), scene);
     select(cat.indexOf(25544)); // pick the ISS when it's in the set, otherwise clears selection
@@ -125,17 +147,41 @@ async function loadGroup(value: string, force = false) {
     } catch {
       /* storage unavailable — fine */
     }
-    updateStatus();
+    await firstPositions;
+    if (token !== loadToken) return;
+
+    if (result.warning) toast.show('warning', result.warning, 12000);
+    else toast.hide();
   } catch (err) {
     if (token !== loadToken) return;
-    setStatus(`Couldn't load data: ${(err as Error).message}`);
+    setStatus(`Couldn't load ${label}.`);
+    toast.show('error', (err as Error).message);
+  } finally {
+    if (token === loadToken) {
+      setLoading(false);
+      updateStatus();
+    }
   }
 }
 
 groupSelect.value = savedGroup();
 if (!groupSelect.value) groupSelect.value = 'stations';
 groupSelect.addEventListener('change', () => loadGroup(groupSelect.value));
-$('refresh').addEventListener('click', () => loadGroup(groupSelect.value, true));
+refreshBtn.addEventListener('click', () => loadGroup(groupSelect.value, true));
+
+/**
+ * CelesTrak publishes new data every 2 hours and refuses earlier re-downloads, so the
+ * refresh button only enables once there can actually be something new.
+ */
+function updateRefreshButton() {
+  const next = dataInfo?.nextUpdateAt ?? 0;
+  const waiting = Date.now() < next;
+  refreshBtn.disabled = loading || waiting;
+  const text = waiting
+    ? `New CelesTrak data after ${new Date(next).toISOString().slice(11, 16)} UTC`
+    : 'Check CelesTrak for new data';
+  if (refreshBtn.textContent !== text) refreshBtn.textContent = text;
+}
 
 // ---------------------------------------------------------------------------
 // Selection
@@ -454,17 +500,22 @@ $('to-epoch').addEventListener('click', () => {
   setSpeed(0);
 });
 
+const toast = createToast($('toast'));
 const statusEl = $('status');
 function setStatus(text: string) {
   statusEl.textContent = text;
 }
 
 function updateStatus() {
-  if (!catalog || !dataInfo) return;
+  updateRefreshButton();
+  if (!catalog || !dataInfo || loading) return;
   const ageMin = Math.round((Date.now() - dataInfo.fetchedAt) / 60000);
-  const source = { network: 'fresh from CelesTrak', cache: 'from cache', 'stale-cache': 'stale cache (CelesTrak unreachable)' }[
-    dataInfo.source
-  ];
+  const source = {
+    network: 'fresh from CelesTrak',
+    cache: 'from cache',
+    'stale-cache': 'old cache (CelesTrak unreachable)',
+    snapshot: 'bundled snapshot',
+  }[dataInfo.source];
   const age = ageMin < 1 ? 'just now' : ageMin < 120 ? `${ageMin} min ago` : `${(ageMin / 60).toFixed(1)} h ago`;
   setStatus(
     `${catalog.size.toLocaleString()} objects · ${source}, fetched ${age} · SGP4 worker ${client.lastWorkerMs.toFixed(1)} ms`,

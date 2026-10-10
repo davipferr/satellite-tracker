@@ -9,6 +9,11 @@
   <body>
     <canvas id="scene"></canvas>
     <div id="tooltip" hidden></div>
+    <div id="toast" role="status" aria-live="polite" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="msg"></span>
+      <button class="icon" aria-label="Dismiss">×</button>
+    </div>
 
     <aside class="panel" id="controls">
       <h1>Satellite Tracker</h1>
@@ -38,7 +43,7 @@
         <span><i style="--c: rgb(255 107 140)"></i>GEO</span>
         <span><i style="--c: rgb(194 140 255)"></i>HEO</span>
       </div>
-      <button id="refresh" class="link">Force refresh from CelesTrak</button>
+      <button id="refresh" class="link">Check CelesTrak for new data</button>
       <div id="texture-note" class="note" hidden>
         NASA textures not found. Run <code>npm run textures</code> and reload.
       </div>
